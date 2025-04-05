@@ -1,1 +1,175 @@
+local player = game.Players.LocalPlayer
+local character = script.Parent
+local humanoid = character:WaitForChild("Humanoid")
+local root = character:WaitForChild("HumanoidRootPart")
 
+local uis = game:GetService("UserInputService")
+local rs = game:GetService("ReplicatedStorage")
+local ts = game:GetService("TweenService")
+local debris = game:GetService("Debris")
+
+local replicateFlashStep = rs.ReplicateFlashStep
+local remote = rs.Remote
+local fx = workspace.Flashstep.Fx
+local staminatake = script.Parent.Value
+-- Settings
+local BASESPEED = 16 -- Normal walking speed
+local TOTALFLASHSTEPS = 1 -- Max flash steps allowed
+
+local cd = false
+local flashsteps = TOTALFLASHSTEPS
+local lastFlash = 0
+
+-- Flash step logic
+local function flashStep(position, hrp)
+	hrp.Parent.Head.face.Transparency = 1
+
+	for _, part in pairs(hrp.Parent:GetDescendants()) do
+		if part:IsA("BasePart") then
+			local clone = part:Clone()
+			clone:ClearAllChildren()
+			clone.Anchored = true
+			clone.CanCollide = false
+			clone.Parent = workspace.Fx
+			clone.Color = Color3.fromRGB(0, 0, 0)
+			clone.Material = Enum.Material.Neon
+			clone.Transparency = 0.5
+
+			debris:AddItem(clone, 0.3)
+			ts:Create(clone, TweenInfo.new(0.3), {Transparency = 1}):Play()
+			part.Transparency = part.Transparency + 1
+		end
+	end
+
+	local flashEffect = fx.Flashstep:Clone()
+	flashEffect.Parent = hrp.RootAttachment
+	flashEffect.Enabled = true
+
+	local smoke = fx.Smoke:Clone()
+	smoke.Position = position - Vector3.new(0, 2, 0)
+	smoke.Parent = workspace.Fx
+	smoke.Attachment.Smoke.Enabled = true
+
+	task.delay(0.7, function()
+		hrp.Parent.Head.face.Transparency = 0
+
+		for _, part in pairs(hrp.Parent:GetDescendants()) do
+			if part:IsA("BasePart") then
+				part.Transparency = part.Transparency - 1
+			end
+		end
+
+		local smoke2 = fx.Smoke:Clone()
+		smoke2.Position = hrp.Position - Vector3.new(0, 2, 0)
+		smoke2.Parent = workspace.Fx
+		smoke2.Attachment.Smoke.Enabled = true
+
+		task.delay(0.2, function()
+			smoke.Attachment.Smoke.Enabled = false
+			flashEffect.Enabled = false
+			smoke2.Attachment.Smoke.Enabled = false
+
+			wait(0.6)
+			smoke2:Destroy()
+			smoke:Destroy()
+			flashEffect:Destroy()
+		end)
+	end)
+end
+
+-- Input handling
+uis.InputBegan:Connect(function(input, gpe)
+	if gpe then return end
+
+	if input.KeyCode == Enum.KeyCode.Q and not cd and flashsteps > 0 then
+		cd = true
+		staminatake.Value = true
+		flashsteps -= 1
+		lastFlash = tick()
+
+		humanoid.WalkSpeed = 100 -- Flash step speed
+		flashStep(root.Position, root)
+		remote:FireServer(root.Position, root)
+		replicateFlashStep:FireServer(root.Position, player.Name)
+
+		task.wait(0.7)
+		humanoid.WalkSpeed = BASESPEED
+		cd = false
+	end
+end)
+
+-- Remote event handling
+remote.OnClientEvent:Connect(function(position, hrp)
+	flashStep(position, hrp)
+end)
+
+-- Regenerate flash steps over time
+while task.wait(1) do
+	if tick() - lastFlash > 1 and flashsteps < TOTALFLASHSTEPS then
+		flashsteps += 1
+	end
+end
+
+
+local uis = game:GetService("UserInputService")
+local player = game.Players.LocalPlayer
+local mouse = player:GetMouse()
+local char = player.Character or player.CharacterAdded:Wait()
+local hrp = char:WaitForChild("HumanoidRootPart")
+local debounce = false
+
+local Wkey = false
+local Akey = false
+local Skey = false
+local Dkey = false
+
+mouse.KeyDown:Connect(function(key)
+	if key == "w" then
+		Wkey = true
+	elseif key == "a" then
+		Akey = true
+	elseif key == "s" then
+		Skey = true
+	elseif key == "d" then
+		Dkey = true
+	end
+end)
+
+mouse.KeyUp:Connect(function(key)
+	if key == "w" then
+		Wkey = false
+	elseif key == "a" then
+		Akey = false
+	elseif key == "s" then
+		Skey = false
+	elseif key == "d" then
+		Dkey = false
+	end
+end)
+
+uis.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+
+	if input.KeyCode == Enum.KeyCode.E and not debounce then
+		debounce = true
+
+		local vel = Instance.new("BodyVelocity")
+		vel.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+
+		if Wkey then
+			vel.Velocity = hrp.CFrame.LookVector * 100
+		elseif Akey then
+			vel.Velocity = hrp.CFrame.RightVector * -100
+		elseif Skey then
+			vel.Velocity = hrp.CFrame.RightVector * 100
+		else
+			vel.Velocity = Vector3.new(0, 0, 0)
+		end
+
+		vel.Parent = hrp
+		game.Debris:AddItem(vel, 0.2)
+
+		wait(1)
+		debounce = false
+	end
+end)
